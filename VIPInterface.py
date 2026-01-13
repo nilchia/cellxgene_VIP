@@ -1283,7 +1283,7 @@ def SANK(data):
   for i in range(len(Dnames)-1):
     oneName = Dnames[i:i+2]
     #maxGrp = max(maxGrp,len(D[oneName[0]].unique()))
-    summaryOne = D.groupby(oneName).size().reset_index(name='Count')
+    summaryOne = D.groupby(oneName,observed=False).size().reset_index(name='Count')
     summaryOne=summaryOne[summaryOne['Count']>0]
     sIDs += list(summaryOne[oneName[0]].apply(lambda x: labels.index(x)))
     dIDs += list(summaryOne[oneName[1]].apply(lambda x: labels.index(x)))
@@ -1418,9 +1418,9 @@ def DENS2D(data):
   return img
 
 def toInt(x):
-  if len(x)==0:
+  if x.shape[0]==0:
     return 0
-  return int(x)
+  return int(x.iloc[0])
 
 def STACBAR(data):
   if len(data['genes'])==0:
@@ -1435,7 +1435,7 @@ def STACBAR(data):
   D = D.astype('str').astype('category')
   if data['obs_index'] in D.columns:
     del D[data['obs_index']]
-  cellN = D.groupby(list(D.columns)).size().reset_index(name="Count")
+  cellN = D.groupby(list(D.columns),observed=False).size().reset_index(name="Count")
 
   strCol = data['colorBy']
   tmp = list(D.columns)
@@ -1859,9 +1859,14 @@ def getVisium(data):
         keys = adata.uns[k]['keys']
         visiumID = list(set(adata.obs[keys['slide_column']].unique()) & set(adata.uns['spatial'].keys()))
     return json.dumps(visiumID)
-def adjustAlpha(alpha,adjA):
-    x = alpha/max(alpha)
-    return (1+adjA)*x/(x+adjA)
+def adjustAlpha(x,adjA):
+    if max(x)<=0:
+        return adjA
+    x = x/max(x) #(alpha-min(alpha))/(max(alpha)-min(alpha))
+    a = 1-adjA
+    b = 20**a
+    alpha =(1+a**b)/(1+(a/x)**b)
+    return alpha
 def plotVisiumOne(adata,sid,col,ax,fig,alpha=1,cmap='viridis',dotsize=4):
     keys = adata.uns['visium']['keys']
     img = adata.uns['spatial'][sid]
@@ -1874,17 +1879,20 @@ def plotVisiumOne(adata,sid,col,ax,fig,alpha=1,cmap='viridis',dotsize=4):
     a=ax.imshow(img)
     x = subD.obsm[keys['coordinates']][:,0]*scaler
     y = subD.obsm[keys['coordinates']][:,1]*scaler
-    df = sc.get.obs_df(subD,[col])
+    g_column = 'name_0'
+    if 'feature_name' in subD.var.columns:
+        g_column = 'feature_name'
+    df = sc.get.obs_df(subD,[col],gene_symbols=g_column)
     if pd.api.types.is_numeric_dtype(df[col]):
         a=ax.scatter(x,y,
             c=df[col].to_numpy(),cmap=cmap,s=dotsize,
-            alpha=adjustAlpha(df[col].to_numpy(),1-alpha))
+            alpha=adjustAlpha(df[col].to_numpy(),alpha))
         a=fig.colorbar(a,ax=ax)
     else:
         try:
-            grps = sorted(adata.obs[col].unique().to_list(),key=int)
+            grps = sorted(adata.obs[col].unique().tolist(),key=int)
         except:
-            grps = sorted(adata.obs[col].unique().to_list())
+            grps = sorted(adata.obs[col].unique().tolist())
         if len(grps)<10:
             colors = dict(zip(grps,sns.color_palette('Set1',n_colors=len(grps)).as_hex()))
         else:
@@ -1903,8 +1911,8 @@ def plotVisium(data):
     keys = adata.uns['visium']['keys']
     ncol = int(data['ncol'])
     nSel = len(sel)
-    slides = adata.obs[keys['slide_column']].unique()
-    nSlides = adata.obs[keys['slide_column']].nunique()
+    slides = data['sIDs'] #adata.obs[keys['slide_column']].unique()
+    nSlides = len(slides) #adata.obs[keys['slide_column']].nunique()
     if data['sortID']:
         nrowSection = math.ceil(nSel/ncol)
         nrow = nSlides*nrowSection

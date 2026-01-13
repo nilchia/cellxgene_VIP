@@ -1248,7 +1248,7 @@
         <div id="DEGinput">
           <h3>Find differentially expressed genes <a href="https://interactivereport.github.io/cellxgene_VIP/tutorial/docs/how-to-use-cellxgene-vip.html#vip-deg-differential-expressed-genes" target="_blank"><i class="fa fa-question-circle" style="font-size:20px"></i></a></h3>
           <p>Selection 1 (<span class="cellN1" style="color:red;">0</span>) cells and selection 2 (<span class="cellN2" style="color:red;">0</span>) cells</p>
-          <p>Differentially expressed genes will be detected between the two cell gorups defined above, unless two categories of the 'Custom_combine' annotation are selected,
+          <p>Differentially expressed genes will be detected between the two cell groups defined above, unless two categories of the 'Custom_combine' annotation are selected,
           which enables DE analysis between those two:</p>
           <p id="DEGgrp"></p>
           <p>Select the number of top DEG:
@@ -1269,7 +1269,7 @@
           <p>Select genes to be marked in the volcano plot:
           <input type="checkbox" onclick="$('.DEGgenes').prop('checked', this.checked);">Uncheck / Check All</p>
           <p id="DEGgene"></p>
-          <p>Define the significance in FDR &#62; <input id="DEGsigFDR" type="number" step="0.001" value="0.05" min="0" max="1"/>
+          <p>Define the significance in FDR &#60; <input id="DEGsigFDR" type="number" step="0.001" value="0.05" min="0" max="1"/>
             and absolute log2(FC) &#62; <input id="DEGsigLogfc" type="number" step="0.1" value="1" min="0"/> </p>
           <p>Remove genes in volcano plot with the absolute log2(FC) larger than: <input id="DEGlogfcCut" type="number" step="1" value="10" min="0"/></p>
           <p>Label Size: <input id="DEGlabelSize" type="number" step="0.5" value="3" min="1" max="24"/>
@@ -4119,6 +4119,7 @@ function SGVcompareplot(){
             'abb':window.bioAbbr,
             'cutoff':$("#SGVcomparecutoff").val(),
             'cellCutoff':$("#SGVcompareCellcutoff").val(),
+            'dotsize':1,
             //'combine':combGrp,
             //'combineOrder':combGrpOrder,
             'figOpt':window.figOpt};
@@ -6200,8 +6201,11 @@ meta <- as.data.frame(arrow::read_feather(paste(strPath,".obs.feather",sep="")))
 colnames(D) <- meta[,"name_0"]
 X <- CreateSeuratObject(counts=D)
 X@meta.data <- cbind(X@meta.data,meta)
-# For seurat < ver.5, use X@assays$RNA@data <- X@assays$RNA@counts
-X[['RNA']]['data'] <- X[['RNA']]['counts']
+if (compareVersion(as.character(packageVersion("Seurat")), "5.0")<1) {
+  X@assays[['RNA']]@data <- X@assays[['RNA']]@counts
+} else {
+  X[['RNA']]['data'] <- X[['RNA']]['counts']
+}
 
 %Rdevice png
 
@@ -6247,10 +6251,15 @@ X <- FindClusters(X, resolution = 0.5)
 X.markers <- FindAllMarkers(X, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 top10 <- X.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
 DoHeatmap(X, features = top10$gene, label=FALSE) + theme(text = element_text(size = 8))
+
+%%R
 sessionInfo()
 </div>
 
 <div id="CLIVignetteCode3" style="display:none;">
+```{r setup, include=FALSE}
+reticulate::use_python(system2("which","python", stdout = TRUE),required = TRUE)
+```
 ```{python}
 from pyarrow import feather
 import pandas as pd
@@ -6274,9 +6283,11 @@ meta <- as.data.frame(arrow::read_feather(paste(strPath,".obs.feather",sep="")))
 colnames(D) <- meta[,"name_0"]
 X <- CreateSeuratObject(counts=D)
 X@meta.data <- cbind(X@meta.data,meta)
-# For seurat < ver.5, use X@assays$RNA@data <- X@assays$RNA@counts
-X[['RNA']]['data'] <- X[['RNA']]['counts']
-
+if (compareVersion(as.character(packageVersion("Seurat")), "5.0")<1) {
+  X@assays$RNA@data <- X@assays$RNA@counts
+} else {
+  X[['RNA']]['data'] <- X[['RNA']]['counts']
+}
 
 X[["percent.mt"]] <- PercentageFeatureSet(X, pattern = "^MT-")
 VlnPlot(X, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
