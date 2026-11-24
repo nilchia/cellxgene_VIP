@@ -624,9 +624,17 @@
 
     <div id="ADDG" class="tabcontent">
       <h3>Add genes of interest for plotting <a href="https://interactivereport.github.io/cellxgene_VIP/tutorial/docs/how-to-use-cellxgene-vip.html#vip-add-genes-gene-sets" target="_blank"><i class="fa fa-question-circle" style="font-size:20px"></i></a></h3>
+      <p>
+        <label>
+          <input type="checkbox" id="ADDGnormalize" checked>
+          Perform case-insensitive gene matching
+        </label>
+      </p>
       <p>Please input a list of genes separated by comma, semicolon, space or tab:</p>
       <p><textarea id="ADDGinput" rows="5" cols="70"></textarea></p>
-      <p><button onclick="ADDGadd()"><b>Add</b></button></p>
+      <p>
+        <button onclick="ADDGadd()"><b>Add</b></button>
+      </p>
       <p>The following genes were added (click on a gene name to remove): <span id="ADDGsel"></span></p>
       <p>The following genes are not in the data: <span id="ADDGdel" style="color:red"></span></p>
 
@@ -725,6 +733,7 @@
           </p>
           <p>Choose a gene ('Add Genes' first): <select id="SGVgene"></select></p>
           <p>Expression cutoff for cell filtering: <input id="SGVcutoff" type="number" step="0.1" value="1" min="0"/></p>
+          <p></p>Dot size for cells: <input type="range" min="0" max="2" value="1" step="0.1" id="SGVdotsize" oninput="this.nextElementSibling.value = this.value"><output>1</output></p>
           <p>Group by:
           <select id="SGVgrp"></select></p>
         </div>
@@ -749,6 +758,7 @@
           <p>Choose a gene ('Add Genes' first): <select id="SGVcomparegene"></select></p>
           <p>Expression cutoff (for cell filtering): <input id="SGVcompareCellcutoff" type="number" step="0.01" value="0.01" min="0"/></p>
           <p>Expression cutoff (for percentage calculation): <input id="SGVcomparecutoff" type="number" step="0.1" value="1" min="0"/></p>
+          <p></p>Dot size for cells: <input type="range" min="0" max="1" value="0.5" step="0.1" id="SGVcomparedotsize" oninput="this.nextElementSibling.value = this.value"><output>0.5</output></p>
           <p>Group by:
           <select id="SGVcompareorder"></select></p>
           <p>Sub-group by:
@@ -875,7 +885,14 @@
         </p>
         <p>Choose genes ('Add Genes' first): <input id='HEATgenesAll' type="checkbox" checked onclick="$('.HEATgenes').prop('checked', this.checked);">Uncheck / Check All <span id="HEATgeneAnno"><input id="HEATgeneAnnoCK" type="checkbox" checked>Using protein atlas annotation</span></p>
         <p id="HEATgene"></p>
-        <p>Or upload a gene annotation csv file (first column header is 'gene'): <input type='file' id='HEATgeneFile' onchange="HEATgeneFileUpdate()" /></p>
+        <p>Or upload a gene annotation CSV file:</p>
+        <ul style="margin-left: 2rem; margin-top: -0.5rem;">
+          <li>First column header must be <code>gene</code></li>
+          <li>Gene name case sensitivity follows the setting in the "Add Genes" tab</li>
+        </ul>
+        <p style="margin-left: 2rem;">
+          <input type="file" id="HEATgeneFile" onchange="HEATgeneFileUpdate()" />
+        </p>
         <p>Choose categorical annotation(s):</p>
         <p id="HEATgrp"></p>
         <p>Choose continuous annotation(s):</p>
@@ -1054,7 +1071,8 @@
 
         <pre id="DOTnote" style="color:red;">Note: Unscaled data is used as the visualiztion is hard to interpret for scaled or corrected matrices in which zero counts had been replaced by other values. Scaling option in Global Setting does not apply to Dot plot</pre>
       </div>
-      <button class="DOTbt" onclick="DOTplot()"><b>Plot</b></button>
+      <button class="DOTbt" onclick="DOTplot('plot')"><b>Plot</b></button>
+      <button class="DOTbt" onclick="DOTplot('data')">Get Data</button>
       <button class="DOTbt" onclick="ZoomIn('DOTresize')">Zoom In</button>
       <button class="DOTbt" onclick="ZoomOut('DOTresize')">Zoom Out</button>
       <button class="DOTpngBT" onclick="saveImg('DOTimg')" disabled>Save</button>
@@ -1598,7 +1616,7 @@
         <div id="COSMXfigs"></div>
       </div>
     </div> <!-- COSMX -->
-    
+
     <div id='VISIUM' class='tabcontent'>
       <h3>Visualizing 10X visium data along with histology images</h3>
       <div id='VISIUMinput'>
@@ -2314,7 +2332,7 @@ function enableCOXMX(){
   });
 }
 function enableVISIUM(){
-    $.ajax({
+  $.ajax({
     type: "POST",
     url: VIPurl,
     data:JSON.stringify({'method':"checkVisium",'dataset': window.store.getState().config.displayNames.dataset+'.h5ad'}),
@@ -2324,7 +2342,7 @@ function enableVISIUM(){
       if(VisiumIDs == null || VisiumIDs.length == 0){
           return;
       }
-      //available coxMx samples
+      //available cosMx samples
       var htmlCheck = "";
       for(const s of VisiumIDs){
           htmlCheck += '<label id="VISIUMsampleCK_'+s+'"><input class="VISIUMsamples" type="checkbox" value="'+s+'"/>'+s+'</label>';
@@ -2600,8 +2618,8 @@ function init(){
             // for cosMx availability
             console.log("Checking cosMx ...");
             enableCOXMX();
-            
-            // for cosMx availability
+
+            // for visium availability
             console.log("Checking visium ...");
             enableVISIUM();
 
@@ -3346,15 +3364,18 @@ function COSMXsetGeneColor(){
     }else{
         $(".COSMXgenes").prop("disabled",false);
     }
-    html = "";
-    for(const one of selG){
-        html += "<label>"+one+"<input class='COSMXgeneColors colorInput' id='COSMXgeneColor_"+one+"'";
-        if($("#COSMXgeneColor_"+one).val()!==undefined){
-            html += " value='"+$("#COSMXgeneColor_"+one).val()+"'";
+    
+    if(selG.length>0){
+        html = "";
+        for(const one of selG){
+            html += "<label>"+one+"<input class='COSMXgeneColors colorInput' id='COSMXgeneColor_"+one+"'";
+            if($("#COSMXgeneColor_"+one).val()!==undefined){
+                html += " value='"+$("#COSMXgeneColor_"+one).val()+"'";
+            }
+            html += " type='color'></label>";
         }
-        html += " type='color'></label>";
+        $("#COSMXgeneColor").html(html);
     }
-    $("#COSMXgeneColor").html(html);
 }
 function VISIUMref(){
     showGene('VISIUM');
@@ -3560,25 +3581,33 @@ function ABBRcombine(){
   $("#ABBRcombineList").show();
 }
 // process genes
+function matchGene(one, totalG, totalGlower) {
+  const normalize = $("#ADDGnormalize").is(":checked");
+  if (normalize) {
+    const ix = totalGlower.indexOf(one.toLowerCase());
+    return ix !== -1 ? totalG[ix]: null;
+  } else {
+    const ix = totalG.indexOf(one);
+    return ix !== -1 ? one : null;
+  }
+}
 function ADDGadd(){
   var addG = $("#ADDGinput").val().trim().split(/\s+|\s*,\s*|\s*;\s*/);
   var genes =  window.biogen;
   var notG = [];
   var totalG = window.store.getState().annoMatrix._cache.var.__columns[0];
   var totalGlower = totalG.map(function(s){return s.toLowerCase();});
-
-  for(var i=0;i<addG.length;i++){
-    var one = addG[i].trim();
-    if (addG[i].trim().length<1)
-      continue;
-    var ix = totalGlower.indexOf(one.toLowerCase());
-    if(ix !== -1){
-      var oneG = totalG[ix];
-      if(!genes.includes(oneG)){
-        genes.push(oneG);
+  
+  for (let one of addG) {
+    one = one.trim();
+    if (!one) continue;
+    const matched = matchGene(one, totalG, totalGlower);
+    if (matched) {
+      if (!genes.includes(matched)) {
+        genes.push(matched);
       }
-    }else{
-      notG.push(one);
+    } else {
+      notG.push(one)
     }
   }
   $("#ADDGdel").text(notG.join(", "));
@@ -3614,20 +3643,21 @@ function AddGsetAddOne(grpName,gNames){
   var notG = [],geneNames=[];
   var totalG = window.store.getState().annoMatrix._cache.var.__columns[0];
   var totalGlower = totalG.map(function(s){return s.toLowerCase();});
-  for(var i=0;i<gNames.length;i++){
+
+  for (var i=0;i<gNames.length;i++) {
     var one = gNames[i].trim();
-    var ix = totalGlower.indexOf(one.toLowerCase());
-    if(ix !== -1){
-      var oneG = totalG[ix];
-      if (one.length<1) continue;
-      if(!definedG.includes(oneG)){
-        geneNames.push(oneG);
-      }else{
+    if (!one) continue;
+    var matched = matchGene(one, totalG, totalGlower);
+    if (matched) {
+      if (!definedG.includes(matched)) {
+        geneNames.push(matched);
+      } else {
         notG.push(one);
       }
-    }else{
+    } else {
       notG.push(one);
     }
+
   }
   
   var eMsg= "";
@@ -4038,6 +4068,7 @@ function SGVplot(acc){
             'grp':grp,
             'abb':window.bioAbbr,
             'cutoff':$("#SGVcutoff").val(),
+            'dotsize':$("#SGVdotsize").val(),
             'combine':combGrp,
             'combineOrder':combGrpOrder,
             'figOpt':window.figOpt};
@@ -4116,10 +4147,10 @@ function SGVcompareplot(){
             'cells':cells,
             'genes':[$("#SGVcomparegene").val()],
             'grp':grp,
+            'dotsize': $("#SGVcomparedotsize").val(),
             'abb':window.bioAbbr,
             'cutoff':$("#SGVcomparecutoff").val(),
             'cellCutoff':$("#SGVcompareCellcutoff").val(),
-            'dotsize':1,
             //'combine':combGrp,
             //'combineOrder':combGrpOrder,
             'figOpt':window.figOpt};
@@ -4341,13 +4372,14 @@ function HEATgeneFileUpdate(){
       //ADDGadd();
       //sync();
       var iG = geneAnno.map(function(d){
-        var ix = totalGlower.indexOf(d.gene.trim().toLowerCase());
-        if(ix !== -1){
-          d.gene = totalG[ix];
-        }else{
-          d=null;
+        var one = d.gene.trim();
+        var matched = matchGene(one, totalG, totalGlower);
+        if (matched) {
+          d.gene = matched;
+          return d;
+        } else {
+          return null;
         }
-        return d;
       });
       window.HEATgene=iG.filter(n=>n);
     }
@@ -5077,7 +5109,7 @@ function GSPplot(){
   })
 }
 
-function DOTplot(){
+function DOTplot(acc){
   $('#DOTnote').text("");
   var genes =getGenes('DOT');
   var geneSets = getGeneSet('DOT');
@@ -5127,6 +5159,7 @@ function DOTplot(){
             'legendW':$('#DOTlegendW').val(),
             'color':color,
             'figOpt':window.figOpt};
+  if(acc=='data') D['method']='DOTdata';
   $(".DOTbt").prop('disabled',true);
   document.getElementById("DOTspin").style.visibility="visible";
   $.ajax({
@@ -5142,8 +5175,15 @@ function DOTplot(){
         document.getElementById("DOTfig").innerHTML = '';
         return;
       }
-
-      showImg('DOTfig',res)
+      if(acc=='data'){
+        var hiddenE = document.createElement('a');
+        hiddenE.href="data:attachment/text,"+encodeURIComponent(res);
+        hiddenE.target='_blank';
+        hiddenE.download='cellxgene.'+window.store.getState().config.displayNames.dataset+'.dotData.csv';
+        hiddenE.click();
+      }else{
+        showImg('DOTfig',res);
+      }
       //document.getElementById("DOTfig").innerHTML = '<img id="DOTpng" src="data:image/png;base64,'+res+'" width=100% height="auto"/>';// height="450" width="450"
       $(".DOTpngBT").prop('disabled',false);
     },
@@ -5963,8 +6003,7 @@ function CLIplot(){
         }
         if (line.includes('<\/body>')) readIt = false;
       });
-      // console.log(filteredRes);
-      $("#CLIresize").html(res);
+      $("#CLIresize").html(filteredRes);
 
       var num = 0;
       for (let item of document.getElementsByClassName('output_svg')) {
