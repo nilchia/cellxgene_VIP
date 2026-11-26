@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import re
 
 if len(sys.argv) != 2:
     print("Usage: python patch.py /path/to/diffxpy")
@@ -32,12 +33,11 @@ for root, dirs, files in os.walk(target):
             text = f.read()
         repaired = False
         for old, new in replacements.items():
-            if old in text:
-                repaired = True
-            text = text.replace(old, new)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(text)
+            text, count = re.subn(rf"(?<![\w.]){re.escape(old)}\b", new, text)
+            repaired = repaired or bool(count)
         if repaired:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
             print("\t\toutdated scripts detected, repaired.")
         else:
             print("\t\tall good here.")

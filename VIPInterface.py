@@ -61,7 +61,7 @@ def route(data,appConfig):
   #ppr.pprint(data)
   try:
     getLock(jobLock)
-    setTimeStamp(data, appConfig.dataset_config.app__identifier) # pass identifier to name timestamp file
+    setTimeStamp(data, getattr(appConfig.dataset_config, "app__identifier", "null"))
     taskRes = distributeTask(data["method"])(data)
     freeLock(jobLock)
     gc.collect()
@@ -753,7 +753,7 @@ def GD(data):
       adata = D
     else:
       #sT =time.time()
-      adata = adata.concatenate(D)
+      adata = ad.concat([adata, D], label="batch", index_unique="-")
       #ppr.pprint("Concatenate data cost %f seconds" % (time.time()-sT))
   if adata is None:
     return Msg("No cells were satisfied the condition!")
@@ -821,7 +821,7 @@ def DEG(data):
       if adata is None:
         adata = D
       else:
-        adata = adata.concatenate(D)
+        adata = ad.concat([adata, D], label="batch", index_unique="-")
 
   if data['DEmethod']=='default':
     if sum(mask[0]==True)<10 or sum(mask[1]==True)<10:

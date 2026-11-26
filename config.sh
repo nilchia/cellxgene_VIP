@@ -74,6 +74,8 @@ make install-dist
 cd ..
 
 ## finished setting up ------
+diffxpyPath="$(python -c 'import importlib.util; print(next(iter(importlib.util.find_spec("diffxpy").submodule_search_locations)))')"
+python vipdocker/build/respatch/repair_diffxpy.py "$diffxpyPath"
 ./update.VIPInterface.sh all
 
 export LIBARROW_MINIMAL=false
