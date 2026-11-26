@@ -22,26 +22,29 @@
 
 set -o errexit
 
-pythonV="$(python --version)"
-if [[ $pythonV != *"Python 3.7"* && $pythonV != *"Python 3.8"* ]]; then
-  echo "Only support Python 3.7 or 3.8"
-  exit 0
+if ! python -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))'; then
+  echo "This installer requires Python 3.12; activate the VIP environment first." >&2
+  exit 1
 fi
 
 ## buld the cellxgene and install -----------
 
 ## obtain a clean version cellxgene a specific version by sha key
-rm -rf cellxgene
+if [ -e cellxgene ]; then
+  echo "The cellxgene directory already exists; move it before running this installer." >&2
+  exit 1
+fi
 git clone https://github.com/nilchia/cellxgene.git
 cd cellxgene
-git checkout 115a535e8f6fae4a5a3c50c5df87ff6e18db4278 # v1.1.1
+git checkout 96eb35b9c6741b6fd3a469e4d064f5f9e3861714 # v_1.3.0_close_button
+# Match the NumPy version in VIP_conda_R.yml instead of downgrading it.
+grep -qx 'numpy==2.0.1' server/requirements.txt
+sed -i 's/^numpy==2\.0\.1$/numpy==2.1.0/' server/requirements.txt
 cd ..
 
 ## update the client-side source code of cellxgene for VIP
 echo -e "\nwindow.store = store;" >> cellxgene/client/src/reducers/index.js
 sed -i "s|<div id=\"root\"></div>|$(sed -e 's/[&\\/]/\\&/g; s/|/\\|/g; s/$/\\/;' -e '$s/\\$//' index_template.insert)\n&|" "cellxgene/client/index_template.html"
-
-# sed -i "s|globals.datasetTitleMaxCharacterCount|50|; s|width: \"190px\"|width: \"300px\"|; s|{aboutURL ? <a href={aboutURL}|{myURL ? <a href={myURL}|; s|return|var myURL=displayTitle.split('_')[0].startsWith('GSE') \? 'https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc='\+displayTitle.split('_')[0]:aboutURL;\n    \n    return|" "cellxgene/client/src/components/leftSidebar/topLeftLogoAndTitle.js"
 
 sed -i "s|logoRelatedPadding = 50|logoRelatedPadding = 60|" "cellxgene/client/src/components/leftSidebar/index.js"
 
